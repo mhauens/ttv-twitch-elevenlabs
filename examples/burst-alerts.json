@@ -1,0 +1,47 @@
+[
+  {
+    "source": "local",
+    "alertType": "cheer",
+    "dedupeKey": "burst-001",
+    "payload": {
+      "userName": "viewer-001",
+      "message": "burst alert 1"
+    }
+  },
+  {
+    "source": "local",
+    "alertType": "cheer",
+    "dedupeKey": "burst-002",
+    "payload": {
+      "userName": "viewer-002",
+      "message": "burst alert 2"
+    }
+  },
+  {
+    "source": "local",
+    "alertType": "subscription",
+    "dedupeKey": "burst-003",
+    "payload": {
+      "userName": "viewer-003",
+      "message": "burst alert 3"
+    }
+  },
+  {
+    "source": "local",
+    "alertType": "raid",
+    "dedupeKey": "burst-004",
+    "payload": {
+      "userName": "viewer-004",
+      "message": "burst alert 4"
+    }
+  },
+  {
+    "source": "local",
+    "alertType": "follow",
+    "dedupeKey": "burst-005",
+    "payload": {
+      "userName": "viewer-005",
+      "message": "burst alert 5"
+    }
+  }
+]

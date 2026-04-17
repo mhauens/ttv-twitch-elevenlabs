@@ -1,0 +1,35 @@
+@baseUrl = http://127.0.0.1:3000
+
+### Submit an alert
+POST {{baseUrl}}/api/v1/alerts
+Content-Type: application/json
+
+{
+  "source": "local",
+  "alertType": "cheer",
+  "dedupeKey": "example-1",
+  "payload": {
+    "userName": "tester",
+    "message": "hello queue"
+  }
+}
+
+### Submit the same dedupe key again
+POST {{baseUrl}}/api/v1/alerts
+Content-Type: application/json
+
+{
+  "source": "local",
+  "alertType": "cheer",
+  "dedupeKey": "example-1",
+  "payload": {
+    "userName": "tester",
+    "message": "duplicate request"
+  }
+}
+
+### Inspect queue status
+GET {{baseUrl}}/api/v1/queue
+
+### Inspect service health
+GET {{baseUrl}}/api/v1/health

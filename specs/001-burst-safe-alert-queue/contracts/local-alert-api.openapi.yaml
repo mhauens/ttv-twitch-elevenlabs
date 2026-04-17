@@ -1,0 +1,288 @@
+openapi: 3.1.0
+info:
+  title: Local Alert Queue API
+  version: 1.0.0
+  description: >-
+    Local HTTP contract for admitting alerts into the burst-safe queue, reporting
+    queue status, and exposing service health for the Windows-first Twitch and
+    ElevenLabs runtime.
+servers:
+  - url: http://127.0.0.1:3000
+paths:
+  /api/v1/alerts:
+    post:
+      summary: Admit an alert request into queue processing
+      operationId: enqueueAlert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertEnqueueRequest'
+      responses:
+        '202':
+          description: Alert accepted or deferred to disk for later processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAdmissionResponse'
+        '400':
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate alert request handled without creating new side effects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAdmissionResponse'
+        '429':
+          description: Alert rejected or rate-limited by queue policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Queue persistence, recovery, player availability, or shutdown state prevents safe intake
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/queue:
+    get:
+      summary: Retrieve operator-visible queue state
+      operationId: getQueueStatus
+      responses:
+        '200':
+          description: Queue snapshot returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueStatusResponse'
+  /api/v1/health:
+    get:
+      summary: Retrieve service health and readiness state
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy and ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is not ready to accept alert work
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+components:
+  schemas:
+    AlertEnqueueRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - alertType
+        - payload
+      properties:
+        source:
+          type: string
+          enum: [local, twitch, streamerbot]
+        alertType:
+          type: string
+        dedupeKey:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+    AlertAdmissionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - requestId
+            - outcome
+            - reasonCode
+            - message
+          properties:
+            requestId:
+              type: string
+            jobId:
+              type: string
+            sequenceNumber:
+              type: integer
+            outcome:
+              type: string
+              enum: [accepted, deferred-to-disk, duplicate-handled]
+            reasonCode:
+              type: string
+            message:
+              type: string
+    QueueStatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - inMemoryDepth
+            - deferredDepth
+            - oldestPendingAgeMs
+            - recentFailures
+            - recentRejections
+            - lastUpdatedAt
+          properties:
+            activeJob:
+              $ref: '#/components/schemas/ActiveJobSummary'
+            inMemoryDepth:
+              type: integer
+              minimum: 0
+            deferredDepth:
+              type: integer
+              minimum: 0
+            oldestPendingAgeMs:
+              type: integer
+              minimum: 0
+            recentFailures:
+              type: array
+              items:
+                $ref: '#/components/schemas/FailureSummary'
+            recentRejections:
+              type: array
+              items:
+                $ref: '#/components/schemas/RejectionSummary'
+            lastUpdatedAt:
+              type: string
+              format: date-time
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - ready
+            - queuePersistenceReady
+            - playerReady
+            - configurationValid
+          properties:
+            ready:
+              type: boolean
+            queuePersistenceReady:
+              type: boolean
+            playerReady:
+              type: boolean
+            configurationValid:
+              type: boolean
+            recoveryMessage:
+              type: string
+    ActiveJobSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - jobId
+        - alertType
+        - state
+        - activatedAt
+      properties:
+        jobId:
+          type: string
+        alertType:
+          type: string
+        state:
+          type: string
+          enum: [active]
+        activatedAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+    FailureSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - jobId
+        - failureCode
+        - failureReason
+        - failedAt
+      properties:
+        jobId:
+          type: string
+        requestId:
+          type: string
+        failureCode:
+          type: string
+        failureReason:
+          type: string
+        failedAt:
+          type: string
+          format: date-time
+        recoveryFailure:
+          type: boolean
+    RejectionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - reasonCode
+        - message
+        - rejectedAt
+      properties:
+        requestId:
+          type: string
+        reasonCode:
+          type: string
+        message:
+          type: string
+        rejectedAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: string

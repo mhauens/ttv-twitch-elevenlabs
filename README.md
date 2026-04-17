@@ -1,0 +1,189 @@
+# ttv-twitch-elevenlabs
+
+Lokaler Windows-First-Service fuer burst-sichere Alert-Verarbeitung mit HTTP-Intake, ElevenLabs-Text-to-Speech, lokaler Audiowiedergabe, SQLite-gestuetztem Overflow und deterministischer Restart-Recovery.
+
+Das Projekt ist fuer Twitch-nahe Events und lokale Alert-Pipelines gedacht: Alerts werden angenommen, in einer Single-Consumer-Queue verarbeitet, bei Lastspitzen nicht still verworfen und nach einem Neustart kontrolliert wieder aufgenommen.
+
+## Kernfunktionen
+
+- Burst-sichere Alert-Annahme ueber `POST /api/v1/alerts`
+- Nicht-praeemptive Single-Consumer-Verarbeitung: ein aktiver Alert wird nicht durch spaetere Alerts unterbrochen
+- SQLite-gestuetzter Overflow, wenn die In-Memory-Grenze erreicht ist
+- Deterministische Recovery nach Neustart
+- Queue- und Readiness-Sichtbarkeit ueber `GET /api/v1/queue` und `GET /api/v1/health`
+- Lokale Audioausgabe ueber VLC oder mpv
+- Stub-Modus fuer lokale Entwicklung ohne echte ElevenLabs-Anbindung
+
+## Queue-Garantien
+
+- Es gibt genau einen Consumer.
+- Ein aktiver Alert bleibt aktiv, bis er abgeschlossen oder fehlgeschlagen ist.
+- Akzeptierte Arbeit behaelt ihre sichtbare FIFO-Reihenfolge.
+- Wenn der Speicher voll ist, wird neuer Backlog nach SQLite verschoben statt verworfen.
+- Wenn bereits deferierter Backlog existiert, bekommt neuer Intake keine Ausfuehrungsprioritaet davor.
+- Ein waehrend eines unerwarteten Stopps aktiver Alert wird beim Start als `recovery-failed` markiert und nicht automatisch erneut abgespielt.
+- Die Readiness bleibt `unavailable`, wenn Recovery oder Persistenz neuen Intake unsicher machen.
+
+## Tech-Stack
+
+- Node.js 22 LTS
+- TypeScript 5
+- Express 5
+- Zod
+- Pino
+- better-sqlite3
+- Vitest und Supertest
+
+## Voraussetzungen
+
+- Windows 10 oder 11
+- Node.js 22 LTS
+- Ein lokal installierter Player wie VLC oder mpv
+- Schreibrechte fuer:
+  - `QUEUE_DB_PATH` fuer SQLite-Persistenz
+  - `AUDIO_OUTPUT_DIR` fuer erzeugte Audioartefakte
+
+## Schnellstart
+
+```powershell
+pnpm install
+Copy-Item .env.example .env
+pnpm build
+pnpm dev
+```
+
+Standardmaessig nutzt das Projekt diese lokalen Pfade:
+
+- `.queue-data/alerts.sqlite` fuer Overflow und Recovery-Metadaten
+- `.audio-output/` fuer temporaere Audioausgaben
+
+Fuer lokale Entwicklung ohne ElevenLabs reicht meist:
+
+```env
+TTS_MODE=stub
+PLAYER_KIND=vlc
+PLAYER_COMMAND=vlc
+```
+
+## Konfiguration
+
+Die Laufzeitkonfiguration kommt aus `.env`. Wichtige Variablen:
+
+| Variable | Bedeutung |
+| --- | --- |
+| `HOST` / `PORT` | Bind-Adresse des HTTP-Servers |
+| `QUEUE_MEMORY_LIMIT` | Maximaler In-Memory-Backlog vor Overflow |
+| `QUEUE_DEFERRED_LIMIT` | Obergrenze fuer deferierten Backlog in SQLite |
+| `QUEUE_DB_PATH` | SQLite-Datei fuer Overflow und Recovery |
+| `AUDIO_OUTPUT_DIR` | Verzeichnis fuer generierte Audio-Dateien |
+| `PLAYER_KIND` | Player-Typ, z. B. `vlc` oder `mpv` |
+| `PLAYER_COMMAND` | Ausfuehrbarer Player-Befehl auf dem Zielsystem |
+| `PLAYER_TIMEOUT_MS` | Timeout fuer lokale Wiedergabe |
+| `TTS_MODE` | `stub` fuer lokal, `elevenlabs` fuer echte TTS |
+| `ELEVENLABS_API_KEY` | API-Key fuer ElevenLabs |
+| `ELEVENLABS_VOICE_ID` | Zielstimme fuer ElevenLabs |
+| `ELEVENLABS_MODEL_ID` | ElevenLabs-Modell |
+| `SHUTDOWN_POLICY` | Aktuell `preserve-pending` fuer kontrolliertes Persistieren beim Stop |
+
+Die vollstaendige Beispielkonfiguration steht in [.env.example](/c:/development/ttv-twitch-elevenlabs/.env.example).
+
+## API-Ueberblick
+
+### `POST /api/v1/alerts`
+
+Nimmt einen Alert an und fuehrt ihn sofort oder spaeter aus.
+
+Beispiel:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/v1/alerts -ContentType 'application/json' -Body (@{
+  source = 'local'
+  alertType = 'cheer'
+  payload = @{ userName = 'tester'; message = 'hello queue' }
+} | ConvertTo-Json -Depth 5)
+```
+
+Typische Outcomes:
+
+- `accepted`
+- `deferred-to-disk`
+- `duplicate-handled`
+
+Moegliche Fehlercodes kommen unter anderem bei ungueltigen Requests, Backpressure oder unsicherem Recovery-Zustand zurueck.
+Wenn der konfigurierte Player nicht verfuegbar ist oder der Service bereits herunterfaehrt, antwortet der Intake ebenfalls mit `503`.
+
+### `GET /api/v1/queue`
+
+Liefert die operative Queue-Sicht, darunter:
+
+- `activeJob`
+- `inMemoryDepth`
+- `deferredDepth`
+- `oldestPendingAgeMs`
+- `recentFailures`
+- `recentRejections`
+
+### `GET /api/v1/health`
+
+Liefert Readiness und Betriebszustand, darunter:
+
+- `ready`
+- `queuePersistenceReady`
+- `playerReady`
+- `configurationValid`
+- optional `recoveryMessage`
+
+Wenn `playerReady=false` oder der Service sich im Shutdown befindet, nimmt `POST /api/v1/alerts` keine neue Arbeit mehr an.
+
+Die formale API-Beschreibung liegt in [local-alert-api.openapi.yaml](/c:/development/ttv-twitch-elevenlabs/specs/001-burst-safe-alert-queue/contracts/local-alert-api.openapi.yaml).
+
+## Entwicklung
+
+```powershell
+pnpm dev
+pnpm lint
+pnpm test
+pnpm build
+```
+
+Empfohlene Mindestvalidierung fuer nicht-triviale Aenderungen:
+
+```powershell
+pnpm lint
+pnpm test
+pnpm build
+```
+
+Beispiele fuer Requests und Burst-Tests:
+
+- [examples/alerts.http](/c:/development/ttv-twitch-elevenlabs/examples/alerts.http)
+- [examples/burst-alerts.json](/c:/development/ttv-twitch-elevenlabs/examples/burst-alerts.json)
+
+## Projektstruktur
+
+- [src/app](/c:/development/ttv-twitch-elevenlabs/src/app): Bootstrap und HTTP-Server
+- [src/config](/c:/development/ttv-twitch-elevenlabs/src/config): Env-Validierung und Queue-Konfiguration
+- [src/domain](/c:/development/ttv-twitch-elevenlabs/src/domain): Queue- und Recovery-Modelle
+- [src/integrations](/c:/development/ttv-twitch-elevenlabs/src/integrations): Event-Normalisierung und ElevenLabs-Client
+- [src/playback](/c:/development/ttv-twitch-elevenlabs/src/playback): VLC/mpv-Adapter
+- [src/routes](/c:/development/ttv-twitch-elevenlabs/src/routes): HTTP-Transport
+- [src/services](/c:/development/ttv-twitch-elevenlabs/src/services): Admission, Orchestrierung, Overflow, Recovery, Status
+- [tests](/c:/development/ttv-twitch-elevenlabs/tests): Unit-, Integrations- und Contract-Tests
+- [docs/runtime.md](/c:/development/ttv-twitch-elevenlabs/docs/runtime.md): Laufzeit- und Operator-Hinweise
+
+## Betriebs- und Recovery-Checks
+
+Empfohlener Smoke-Test:
+
+1. Service starten.
+2. Einen einzelnen Alert senden.
+3. `GET /api/v1/queue` und `GET /api/v1/health` pruefen.
+4. Genug Alerts senden, um Overflow zu erzeugen.
+5. Service waehrend eines aktiven Alerts neu starten.
+6. Pruefen, dass deferierter Backlog fortgesetzt wird und der unterbrochene Alert als `recovery-failed` auftaucht.
+
+## Weiterfuehrende Doku
+
+- [docs/runtime.md](/c:/development/ttv-twitch-elevenlabs/docs/runtime.md)
+- [specs/001-burst-safe-alert-queue/quickstart.md](/c:/development/ttv-twitch-elevenlabs/specs/001-burst-safe-alert-queue/quickstart.md)
+- [AGENTS.md](/c:/development/ttv-twitch-elevenlabs/AGENTS.md)
