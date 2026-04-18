@@ -4,6 +4,8 @@ Lokaler Windows-First-Service fuer burst-sichere Alert-Verarbeitung mit HTTP-Int
 
 Das Projekt ist fuer Twitch-nahe Events und lokale Alert-Pipelines gedacht: Alerts werden angenommen, in einer Single-Consumer-Queue verarbeitet, bei Lastspitzen nicht still verworfen und nach einem Neustart kontrolliert wieder aufgenommen.
 
+Offiziell unterstuetzte Intake-Quellen fuer `POST /api/v1/alerts` sind `local`, `twitch`, `streamerbot` und `mixitup`.
+
 ## Kernfunktionen
 
 - Burst-sichere Alert-Annahme ueber `POST /api/v1/alerts`
@@ -112,6 +114,61 @@ Typische Outcomes:
 Moegliche Fehlercodes kommen unter anderem bei ungueltigen Requests, Backpressure oder unsicherem Recovery-Zustand zurueck.
 Wenn der konfigurierte Player nicht verfuegbar ist oder der Service bereits herunterfaehrt, antwortet der Intake ebenfalls mit `503`.
 
+Der bestehende Request bleibt fuer alle Quellen identisch:
+
+- `source`
+- `alertType`
+- optional `dedupeKey`
+- `payload`
+
+Der Response-Envelope bleibt ebenfalls unveraendert. Wichtige Automationssignale sind:
+
+- Mix It Up: `data.outcome`, `data.jobId`
+- Streamer.bot: HTTP-Status, `data.outcome`, `data.jobId`
+
+## Offizielle Integrationen
+
+### Mix It Up
+
+Verwende in Mix It Up eine `Web Request`-Action mit diesen Einstellungen:
+
+- Methode: `POST`
+- URL: `http://127.0.0.1:3000/api/v1/alerts`
+- Header: `Content-Type: application/json`
+- Body:
+
+```json
+{
+  "source": "mixitup",
+  "alertType": "follow",
+  "payload": {
+    "userName": "$username",
+    "message": "Willkommen im Stream"
+  }
+}
+```
+
+Fuer die weitere Automatisierung sind `data.outcome` und `data.jobId` die offiziellen Signale.
+
+### Streamer.bot
+
+Offiziell unterstuetzt ist nur der Script-/Program-Execution-POST-Flow. Verwende dafuer das Node.js-Beispiel in [examples/streamerbot-alert.mjs](/c:/development/ttv-twitch-elevenlabs/examples/streamerbot-alert.mjs) oder uebernimm denselben Request in ein eigenes Script.
+
+Der relevante Request-Body bleibt:
+
+```json
+{
+  "source": "streamerbot",
+  "alertType": "raid",
+  "payload": {
+    "userName": "raid-leader",
+    "message": "Raid erfolgreich uebernommen"
+  }
+}
+```
+
+Fuer Erfolg oder Fehler werden offiziell der HTTP-Status sowie `data.outcome` und `data.jobId` ausgewertet.
+
 ### `GET /api/v1/queue`
 
 Liefert die operative Queue-Sicht, darunter:
@@ -157,6 +214,7 @@ pnpm build
 Beispiele fuer Requests und Burst-Tests:
 
 - [examples/alerts.http](/c:/development/ttv-twitch-elevenlabs/examples/alerts.http)
+- [examples/streamerbot-alert.mjs](/c:/development/ttv-twitch-elevenlabs/examples/streamerbot-alert.mjs)
 - [examples/burst-alerts.json](/c:/development/ttv-twitch-elevenlabs/examples/burst-alerts.json)
 
 ## Projektstruktur

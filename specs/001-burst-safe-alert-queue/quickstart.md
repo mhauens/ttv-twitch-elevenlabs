@@ -42,6 +42,41 @@ Expected result:
 - Queue status shows one active or pending alert
 - Structured logs include request and correlation identifiers
 
+## 2a. Validate Mix It Up intake
+
+Configure a Mix It Up `Web Request` action with:
+
+- Method: `POST`
+- URL: `http://127.0.0.1:3000/api/v1/alerts`
+- Header: `Content-Type: application/json`
+- Body:
+
+```json
+{
+  "source": "mixitup",
+  "alertType": "follow",
+  "payload": {
+    "userName": "$username",
+    "message": "Willkommen im Stream"
+  }
+}
+```
+
+Expected result:
+
+- The response envelope is unchanged.
+- Mix It Up can inspect `data.outcome` and `data.jobId`.
+
+## 2b. Validate Streamer.bot scripted POST intake
+
+Run the official scripted POST flow with `examples/streamerbot-alert.mjs` or the equivalent Node.js request shown in the feature quickstart.
+
+Expected result:
+
+- The HTTP status reflects the documented admission outcome.
+- Streamer.bot can inspect HTTP status plus `data.outcome` and `data.jobId`.
+- No alternative Streamer.bot transport path is required for supported operation.
+
 ## 3. Verify queue status visibility
 
 ```powershell
@@ -107,4 +142,5 @@ pnpm test
 Expected result:
 
 - Contract, integration, and unit tests pass.
+- Supported intake sources `local`, `twitch`, `streamerbot`, and `mixitup` remain contract-compatible.
 - Burst overflow, queue visibility, and recovery-failed restart handling are covered automatically.

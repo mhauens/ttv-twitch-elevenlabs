@@ -14,6 +14,33 @@ Content-Type: application/json
   }
 }
 
+### Mix It Up Web Request payload
+POST {{baseUrl}}/api/v1/alerts
+Content-Type: application/json
+
+{
+  "source": "mixitup",
+  "alertType": "follow",
+  "payload": {
+    "userName": "$username",
+    "message": "Willkommen im Stream"
+  }
+}
+
+### Streamer.bot canonical payload
+# See examples/streamerbot-alert.mjs for the official scripted POST flow.
+POST {{baseUrl}}/api/v1/alerts
+Content-Type: application/json
+
+{
+  "source": "streamerbot",
+  "alertType": "raid",
+  "payload": {
+    "userName": "raid-leader",
+    "message": "Raid erfolgreich uebernommen"
+  }
+}
+
 ### Submit the same dedupe key again
 POST {{baseUrl}}/api/v1/alerts
 Content-Type: application/json
