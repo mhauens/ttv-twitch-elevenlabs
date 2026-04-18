@@ -1,4 +1,4 @@
-export type AlertSource = 'local' | 'twitch' | 'streamerbot';
+export type AlertSource = 'local' | 'twitch' | 'streamerbot' | 'mixitup';
 
 export interface AlertRequest {
   readonly requestId: string;

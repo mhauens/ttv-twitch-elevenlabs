@@ -5,7 +5,7 @@ import { createCorrelationId, createRequestId } from '../shared/ids.js';
 import { nowIso } from '../shared/time.js';
 
 export const alertRequestBodySchema = z.object({
-  source: z.enum(['local', 'twitch', 'streamerbot']),
+  source: z.enum(['local', 'twitch', 'streamerbot', 'mixitup']),
   alertType: z.string().min(1),
   dedupeKey: z.string().min(1).optional(),
   payload: z.record(z.string(), z.unknown())

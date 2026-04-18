@@ -52,10 +52,10 @@ describe('local alert API contract', () => {
 
     const client = request(application.app);
     const accepted = await client.post('/api/v1/alerts').send({
-      source: 'local',
-      alertType: 'cheer',
+      source: 'mixitup',
+      alertType: 'follow',
       dedupeKey: 'dup-1',
-      payload: { userName: 'alpha', message: 'hello' }
+      payload: { userName: 'alpha', message: 'hello from mixitup' }
     });
 
     await waitFor(() => {
@@ -63,13 +63,14 @@ describe('local alert API contract', () => {
     });
 
     const duplicate = await client.post('/api/v1/alerts').send({
-      source: 'local',
-      alertType: 'cheer',
+      source: 'mixitup',
+      alertType: 'follow',
       dedupeKey: 'dup-1',
       payload: { userName: 'alpha', message: 'hello again' }
     });
     const invalid = await client.post('/api/v1/alerts').send({
-      source: 'local',
+      source: 'unsupported',
+      alertType: 'cheer',
       payload: {}
     });
     const queue = await client.get('/api/v1/queue');
@@ -119,6 +120,44 @@ describe('local alert API contract', () => {
     });
 
     gate.release();
+  });
+
+  it('keeps the documented accepted envelope for previously supported sources', async () => {
+    tempDir = await createTempDir();
+    player = new ControlledPlayerAdapter();
+    const tts = new RecordingTextToSpeechClient(path.join(tempDir, 'audio'));
+
+    application = await createApplication({
+      env: createTestEnv({
+        QUEUE_DB_PATH: path.join(tempDir, 'alerts.sqlite'),
+        AUDIO_OUTPUT_DIR: path.join(tempDir, 'audio'),
+        QUEUE_MEMORY_LIMIT: 4,
+        QUEUE_DEFERRED_LIMIT: 4
+      }),
+      logger: createTestLogger(),
+      playerAdapter: player,
+      textToSpeechClient: tts
+    });
+
+    const client = request(application.app);
+    for (const source of ['local', 'twitch', 'streamerbot'] as const) {
+      const response = await client.post('/api/v1/alerts').send({
+        source,
+        alertType: 'cheer',
+        payload: { userName: `${source}-user`, message: `hello from ${source}` }
+      });
+
+      expect(response.status).toBe(202);
+      expect(response.body.status).toBe('accepted');
+      expect(response.body.data).toMatchObject({
+        requestId: expect.any(String),
+        jobId: expect.any(String),
+        sequenceNumber: expect.any(Number),
+        outcome: 'accepted',
+        reasonCode: expect.any(String),
+        message: expect.any(String)
+      });
+    }
   });
 
   it('returns the documented 503 error envelope when player availability blocks intake', async () => {

@@ -8,7 +8,7 @@
 
 - `requestId`: unique identifier for the inbound request
 - `correlationId`: stable identifier used across logs and queue transitions
-- `source`: origin of the alert, such as local, Twitch, or Streamer.bot
+- `source`: origin of the alert, such as `local`, `twitch`, `streamerbot`, or `mixitup`
 - `dedupeKey`: optional upstream-derived key used for duplicate handling
 - `receivedAt`: timestamp when the request reached the service
 - `alertType`: normalized event category for rendering and playback behavior
@@ -19,6 +19,44 @@
 - `requestId`, `correlationId`, `source`, `receivedAt`, `alertType`, and `payload` are required.
 - `source` must be one of the supported inbound origin types.
 - Invalid or incomplete payloads are rejected at intake and never enter queue state.
+
+## Entity: Tool Integration Profile
+
+**Purpose**: Captures the officially documented operator-facing expectations per supported tool integration.
+
+### Mix It Up Profile
+
+- Submission path: existing alert intake endpoint
+- Body shape: canonical `Alert Request`
+- Official response signals: `data.outcome`, `data.jobId`
+
+### Streamer.bot Profile
+
+- Submission path: existing alert intake endpoint through the documented Script-/Program-Execution POST flow
+- Body shape: canonical `Alert Request`
+- Official response signals: HTTP status, `data.outcome`, `data.jobId`
+
+**Validation rules**:
+
+- Tool profiles do not change queue or recovery semantics.
+- Tool profiles define supported documentation and example scope, not alternative API shapes.
+
+## Entity: Integration Example
+
+**Purpose**: Represents operator-copyable example content used in docs and sample files.
+
+**Fields**:
+
+- `toolName`
+- `endpoint`
+- `requestBody`
+- `expectedSignals`
+
+**Validation rules**:
+
+- Examples must use the canonical alert request shape.
+- Examples must only require local endpoint values and payload content to adapt.
+- Examples must stay aligned with the public contract artifact and runtime documentation.
 
 ## Entity: Alert Queue Item
 
