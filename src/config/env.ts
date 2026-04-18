@@ -15,7 +15,7 @@ export const envSchema = z.object({
   PLAYER_KIND: z.enum(['vlc', 'mpv']).default('vlc'),
   PLAYER_COMMAND: z.string().min(1).default('vlc'),
   PLAYER_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
-  TTS_MODE: z.enum(['stub', 'elevenlabs']).default('stub'),
+  TTS_MODE: z.enum(['stub', 'elevenlabs', 'windows']).default('stub'),
   ELEVENLABS_API_KEY: z.string().optional().default(''),
   ELEVENLABS_VOICE_ID: z.string().optional().default(''),
   ELEVENLABS_MODEL_ID: z.string().default('eleven_multilingual_v2'),
