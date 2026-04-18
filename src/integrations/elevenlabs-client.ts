@@ -4,15 +4,8 @@ import path from 'node:path';
 import type { AppEnv } from '../config/env.js';
 import type { AlertQueueItem } from '../domain/alert-queue-item.js';
 import type { AppLogger } from '../shared/logger.js';
-
-export interface SynthesizedAudio {
-  readonly filePath: string;
-  readonly mimeType: string;
-}
-
-export interface TextToSpeechClient {
-  synthesize(item: AlertQueueItem): Promise<SynthesizedAudio>;
-}
+import { renderAlertText } from '../shared/alert-text-renderer.js';
+import type { SynthesizedAudio, TextToSpeechClient } from './text-to-speech-client.js';
 
 export class ElevenLabsClient implements TextToSpeechClient {
   private readonly env: AppEnv;
@@ -25,12 +18,6 @@ export class ElevenLabsClient implements TextToSpeechClient {
 
   public async synthesize(item: AlertQueueItem): Promise<SynthesizedAudio> {
     await mkdir(this.env.AUDIO_OUTPUT_DIR, { recursive: true });
-
-    if (this.env.TTS_MODE === 'stub') {
-      const filePath = path.join(this.env.AUDIO_OUTPUT_DIR, `${item.jobId}.wav`);
-      await writeFile(filePath, createSilentWav());
-      return { filePath, mimeType: 'audio/wav' };
-    }
 
     if (!this.env.ELEVENLABS_API_KEY || !this.env.ELEVENLABS_VOICE_ID) {
       throw new Error('ElevenLabs credentials are required when TTS_MODE=elevenlabs.');
@@ -46,7 +33,7 @@ export class ElevenLabsClient implements TextToSpeechClient {
           Accept: 'audio/mpeg'
         },
         body: JSON.stringify({
-          text: renderText(item),
+          text: renderAlertText(item),
           model_id: this.env.ELEVENLABS_MODEL_ID
         }),
         signal: AbortSignal.timeout(this.env.ELEVENLABS_TIMEOUT_MS)
@@ -64,34 +51,4 @@ export class ElevenLabsClient implements TextToSpeechClient {
 
     return { filePath, mimeType: 'audio/mpeg' };
   }
-}
-
-function renderText(item: AlertQueueItem): string {
-  const message = typeof item.payload.message === 'string' ? item.payload.message : 'Alert received';
-  const userName = typeof item.payload.userName === 'string' ? item.payload.userName : 'viewer';
-  return `${userName}: ${message}`;
-}
-
-function createSilentWav(): Buffer {
-  const sampleRate = 8000;
-  const durationSeconds = 1;
-  const samples = sampleRate * durationSeconds;
-  const dataSize = samples * 2;
-  const buffer = Buffer.alloc(44 + dataSize);
-
-  buffer.write('RIFF', 0);
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write('WAVE', 8);
-  buffer.write('fmt ', 12);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(1, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * 2, 28);
-  buffer.writeUInt16LE(2, 32);
-  buffer.writeUInt16LE(16, 34);
-  buffer.write('data', 36);
-  buffer.writeUInt32LE(dataSize, 40);
-
-  return buffer;
 }

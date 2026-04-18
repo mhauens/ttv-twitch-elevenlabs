@@ -8,7 +8,10 @@ Validate that the local service can admit alerts, persist overflow backlog, expo
 
 - Windows 10/11 machine
 - Node.js 22 LTS
-- Local `.env` configured for bind address, queue persistence path, output directory, player command, and ElevenLabs credentials if live TTS is exercised
+- Local `.env` configured for bind address, queue persistence path, output directory, player command, and the selected TTS mode:
+- `TTS_MODE=stub` for silent local validation
+- `TTS_MODE=windows` for local Windows speech synthesis
+- `TTS_MODE=elevenlabs` only when live ElevenLabs synthesis is exercised, with valid credentials
 - Writable local directory for SQLite persistence and temporary audio files
 - One supported player binary available locally, such as VLC or mpv
 
@@ -23,6 +26,7 @@ pnpm dev
 Expected result:
 
 - Startup validation succeeds
+- If `TTS_MODE=windows` is selected, startup also verifies that Windows speech synthesis can write a temporary WAV artifact under `AUDIO_OUTPUT_DIR`
 - Health endpoint reports ready
 - Queue status shows zero in-memory and deferred backlog
 
@@ -123,13 +127,13 @@ Expected result:
 - Response indicates whether queue persistence, configuration, and player setup are ready
 - Service reports unavailable if persisted backlog cannot be restored safely
 - Alert intake returns `503` while player availability or shutdown state make new work unsafe
-- If the player becomes unavailable after admission, the service pauses queued processing before live ElevenLabs synthesis and resumes in order once the player is available again
+- If the player becomes unavailable after admission, the service pauses queued processing before live TTS synthesis and resumes in order once the player is available again
 
 ## 7. Windows runtime verification
 
 - Verify the configured player binary resolves correctly on Windows
 - Verify SQLite persistence path remains writable across restart
-- Verify generated audio artifacts do not block queue drain because of file locks
+- Verify `AUDIO_OUTPUT_DIR` is writable for startup validation and generated audio artifacts do not block queue drain because of file locks
 - Verify logs are readable enough for the operator to identify rejected, deferred, failed, and recovery-failed alerts quickly
 
 ## Automated validation in this repository

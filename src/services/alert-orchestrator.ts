@@ -4,7 +4,7 @@ import type { QueueConfig } from '../config/queue-config.js';
 import type { ActiveJobSummary } from '../domain/queue-snapshot.js';
 import type { AlertQueueItem } from '../domain/alert-queue-item.js';
 import type { FailureSummary } from '../domain/recovery-failure-record.js';
-import type { TextToSpeechClient } from '../integrations/elevenlabs-client.js';
+import type { TextToSpeechClient } from '../integrations/text-to-speech-client.js';
 import type { PlayerAdapter } from '../playback/player-adapter.js';
 import type { AppLogger } from '../shared/logger.js';
 import { ageMs, nowIso } from '../shared/time.js';

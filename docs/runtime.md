@@ -7,7 +7,14 @@ The service reads configuration from `.env`. Start from `.env.example` and set a
 - `QUEUE_DB_PATH` to a writable SQLite path used for deferred overflow and recovery metadata.
 - `AUDIO_OUTPUT_DIR` to a writable directory for generated audio artifacts.
 - `PLAYER_KIND` and `PLAYER_COMMAND` to a locally installed player such as VLC or mpv.
-- `TTS_MODE=stub` for local testing without ElevenLabs or `TTS_MODE=elevenlabs` with valid credentials.
+- `TTS_MODE=stub` for silent local testing, `TTS_MODE=elevenlabs` with valid credentials, or `TTS_MODE=windows` for local Windows speech synthesis.
+
+When `TTS_MODE=windows` is selected:
+
+- the service still uses the configured player for audible playback
+- generated speech is written as a temporary WAV file under `AUDIO_OUTPUT_DIR`
+- startup fails before readiness if the process is not running on Windows, the local Windows speech path is unusable, or `AUDIO_OUTPUT_DIR` cannot be used for a temporary WAV write test
+- the system default Windows voice is used for this feature version
 
 The default local paths created by the service are:
 
@@ -31,6 +38,8 @@ The service validates configuration at startup and exposes:
 Supported intake sources for `POST /api/v1/alerts` are `local`, `twitch`, `streamerbot`, and `mixitup`.
 
 Example requests are available in `examples/alerts.http`, the official scripted Streamer.bot example is in `examples/streamerbot-alert.mjs`, and a sample burst payload set is available in `examples/burst-alerts.json`.
+
+If `TTS_MODE=windows` is configured on a non-Windows runtime or `powershell.exe`, the Windows speech engine, or the configured audio output directory cannot be used for a temporary WAV write, startup fails before the service can report ready.
 
 ## Official Tool Integration Paths
 
@@ -61,6 +70,7 @@ No alternative Streamer.bot transport path is part of the supported contract.
 - An alert interrupted by an unexpected termination is marked as recovery-failed and is not replayed automatically.
 - Player availability is re-checked immediately before TTS synthesis; if the player is unavailable, queued processing pauses and retries in order instead of spending ElevenLabs tokens prematurely.
 - TTS or player failures are recorded as terminal failures and do not block later accepted alerts.
+- Windows TTS failures follow the same terminal-failure path and do not change queue ordering or backlog behavior.
 
 ## Shutdown Policy
 
@@ -77,5 +87,6 @@ No alternative Streamer.bot transport path is part of the supported contract.
 ## Validation Notes
 
 - Startup validation in this workspace was verified with `pnpm build`, `pnpm lint`, and `pnpm test`.
-- The automated integration suite covers deferred overflow promotion, queue-status visibility, duplicate handling, rejection tracking, recovery-failed startup handling, and non-preemptive FIFO draining.
-- Windows-specific player binary resolution still depends on the operator's installed `PLAYER_COMMAND`; that part was not exercised against a real VLC or mpv binary in this session.
+- The automated integration suite covers deferred overflow promotion, queue-status visibility, duplicate handling, rejection tracking, recovery-failed startup handling, non-preemptive FIFO draining, and Windows TTS startup rejection before readiness.
+- The automated unit suite covers `TTS_MODE=windows` env parsing, provider selection, Windows WAV generation, and synthesis failure propagation.
+- Windows-specific player binary resolution and real audible playback still depend on the operator's installed `PLAYER_COMMAND`; that part was not exercised against a real VLC or mpv binary in this session.

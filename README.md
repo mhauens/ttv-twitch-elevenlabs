@@ -1,6 +1,6 @@
 # ttv-twitch-elevenlabs
 
-Lokaler Windows-First-Service fuer burst-sichere Alert-Verarbeitung mit HTTP-Intake, ElevenLabs-Text-to-Speech, lokaler Audiowiedergabe, SQLite-gestuetztem Overflow und deterministischer Restart-Recovery.
+Lokaler Windows-First-Service fuer burst-sichere Alert-Verarbeitung mit HTTP-Intake, waehlbarer Text-to-Speech-Ausgabe ueber ElevenLabs, Windows-Sprachsynthese oder Stub-Modus, lokaler Audiowiedergabe, SQLite-gestuetztem Overflow und deterministischer Restart-Recovery.
 
 Das Projekt ist fuer Twitch-nahe Events und lokale Alert-Pipelines gedacht: Alerts werden angenommen, in einer Single-Consumer-Queue verarbeitet, bei Lastspitzen nicht still verworfen und nach einem Neustart kontrolliert wieder aufgenommen.
 
@@ -15,6 +15,7 @@ Offiziell unterstuetzte Intake-Quellen fuer `POST /api/v1/alerts` sind `local`, 
 - Queue- und Readiness-Sichtbarkeit ueber `GET /api/v1/queue` und `GET /api/v1/health`
 - Lokale Audioausgabe ueber VLC oder mpv
 - Stub-Modus fuer lokale Entwicklung ohne echte ElevenLabs-Anbindung
+- Windows-TTS-Modus fuer lokale Sprachsynthese ohne ElevenLabs-Zugang
 
 ## Queue-Garantien
 
@@ -67,6 +68,16 @@ PLAYER_KIND=vlc
 PLAYER_COMMAND=vlc
 ```
 
+Fuer lokale Windows-Sprachsynthese ohne externe TTS-API:
+
+```env
+TTS_MODE=windows
+PLAYER_KIND=vlc
+PLAYER_COMMAND=vlc
+```
+
+Der Windows-Modus ist nur auf Windows unterstuetzt, verwendet die Standardstimme des Systems und bleibt fuer die audible Ausgabe auf den konfigurierten Player angewiesen.
+
 ## Konfiguration
 
 Die Laufzeitkonfiguration kommt aus `.env`. Wichtige Variablen:
@@ -81,13 +92,15 @@ Die Laufzeitkonfiguration kommt aus `.env`. Wichtige Variablen:
 | `PLAYER_KIND` | Player-Typ, z. B. `vlc` oder `mpv` |
 | `PLAYER_COMMAND` | Ausfuehrbarer Player-Befehl auf dem Zielsystem |
 | `PLAYER_TIMEOUT_MS` | Timeout fuer lokale Wiedergabe |
-| `TTS_MODE` | `stub` fuer lokal, `elevenlabs` fuer echte TTS |
+| `TTS_MODE` | `stub` fuer lokal, `elevenlabs` fuer externe TTS, `windows` fuer lokale Windows-Sprachsynthese |
 | `ELEVENLABS_API_KEY` | API-Key fuer ElevenLabs |
 | `ELEVENLABS_VOICE_ID` | Zielstimme fuer ElevenLabs |
 | `ELEVENLABS_MODEL_ID` | ElevenLabs-Modell |
 | `SHUTDOWN_POLICY` | Aktuell `preserve-pending` fuer kontrolliertes Persistieren beim Stop |
 
 Die vollstaendige Beispielkonfiguration steht in [.env.example](/c:/development/ttv-twitch-elevenlabs/.env.example).
+
+Wenn `TTS_MODE=windows` gesetzt ist, schlaegt der Start vor Readiness fehl, falls die App nicht auf Windows laeuft oder der lokale Windows-Sprachpfad beziehungsweise `AUDIO_OUTPUT_DIR` nicht fuer einen temporaeren WAV-Schreibtest nutzbar ist.
 
 ## API-Ueberblick
 
@@ -223,6 +236,7 @@ Beispiele fuer Requests und Burst-Tests:
 - [src/config](/c:/development/ttv-twitch-elevenlabs/src/config): Env-Validierung und Queue-Konfiguration
 - [src/domain](/c:/development/ttv-twitch-elevenlabs/src/domain): Queue- und Recovery-Modelle
 - [src/integrations](/c:/development/ttv-twitch-elevenlabs/src/integrations): Event-Normalisierung und ElevenLabs-Client
+- [src/integrations](/c:/development/ttv-twitch-elevenlabs/src/integrations): Event-Normalisierung sowie Stub-, ElevenLabs- und Windows-TTS-Clients
 - [src/playback](/c:/development/ttv-twitch-elevenlabs/src/playback): VLC/mpv-Adapter
 - [src/routes](/c:/development/ttv-twitch-elevenlabs/src/routes): HTTP-Transport
 - [src/services](/c:/development/ttv-twitch-elevenlabs/src/services): Admission, Orchestrierung, Overflow, Recovery, Status

@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { AppEnv } from '../../src/config/env.js';
 import type { AlertQueueItem } from '../../src/domain/alert-queue-item.js';
 import type { AlertRequest } from '../../src/domain/alert-request.js';
-import type { TextToSpeechClient, SynthesizedAudio } from '../../src/integrations/elevenlabs-client.js';
+import type { TextToSpeechClient, SynthesizedAudio } from '../../src/integrations/text-to-speech-client.js';
 import type { PlayerAdapter } from '../../src/playback/player-adapter.js';
 import { createLogger } from '../../src/shared/logger.js';
 import { nowIso } from '../../src/shared/time.js';

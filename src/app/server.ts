@@ -5,7 +5,9 @@ import express, { type Express, type NextFunction, type Request, type Response }
 
 import { createQueueConfig } from '../config/queue-config.js';
 import { loadEnv, type AppEnv } from '../config/env.js';
-import { ElevenLabsClient, type TextToSpeechClient } from '../integrations/elevenlabs-client.js';
+import type { TextToSpeechClient } from '../integrations/text-to-speech-client.js';
+import { createTextToSpeechClient } from '../integrations/tts-client-factory.js';
+import type { WindowsSpeechRunner } from '../integrations/windows-tts-client.js';
 import { createPlayerAdapter, type PlayerAdapter } from '../playback/player-adapter.js';
 import { buildAlertsRoute } from '../routes/alerts-route.js';
 import { buildHealthRoute } from '../routes/health-route.js';
@@ -25,6 +27,10 @@ export interface ApplicationOptions {
   readonly logger?: AppLogger;
   readonly playerAdapter?: PlayerAdapter;
   readonly textToSpeechClient?: TextToSpeechClient;
+  readonly runtimePlatform?: NodeJS.Platform;
+  readonly windowsSpeechRunner?: WindowsSpeechRunner;
+  readonly ensureWindowsOutputDirectory?: (directoryPath: string) => Promise<void>;
+  readonly removeWindowsOutputFile?: (filePath: string) => Promise<void>;
   readonly overflowStore?: OverflowStore;
 }
 
@@ -47,10 +53,19 @@ export async function createApplication(options: ApplicationOptions = {}): Promi
   const env = options.env ?? loadEnv(options.envOverrides);
   const logger = options.logger ?? createLogger(env.LOG_LEVEL);
   const queueConfig = createQueueConfig(env);
+  const textToSpeechClient =
+    options.textToSpeechClient ??
+    (await createTextToSpeechClient({
+      env,
+      logger,
+      runtimePlatform: options.runtimePlatform,
+      windowsSpeechRunner: options.windowsSpeechRunner,
+      ensureWindowsOutputDirectory: options.ensureWindowsOutputDirectory,
+      removeWindowsOutputFile: options.removeWindowsOutputFile
+    }));
   const overflowStore = options.overflowStore ?? new OverflowStore(env.QUEUE_DB_PATH, logger);
   await overflowStore.initialize();
   const playerAdapter = options.playerAdapter ?? (await createPlayerAdapter(env));
-  const textToSpeechClient = options.textToSpeechClient ?? new ElevenLabsClient(env, logger);
 
   const orchestrator = new AlertOrchestrator({
     queueConfig,
