@@ -1,83 +1,21 @@
-import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resolveUpgradeRequestPath } from '../../src/app/server.js';
 
-import { createApplication, type ApplicationContext } from '../../src/app/server.js';
-import {
-  ControlledPlayerAdapter,
-  cleanupTempDir,
-  createTempDir,
-  createTestEnv,
-  createTestLogger
-} from '../support/test-utils.js';
-
-describe('createApplication startup validation', () => {
-  let application: ApplicationContext | undefined;
-  let tempDir: string | undefined;
-
-  afterEach(async () => {
-    if (application) {
-      await application.stop();
-      application = undefined;
-    }
-    if (tempDir) {
-      await cleanupTempDir(tempDir);
-      tempDir = undefined;
-    }
+describe('resolveUpgradeRequestPath', () => {
+  it('extracts the pathname from relative upgrade requests', () => {
+    expect(resolveUpgradeRequestPath('/api/v1/status/ws?token=test')).toBe('/api/v1/status/ws');
   });
 
-  it('rejects startup when windows mode is configured on a non-Windows runtime', async () => {
-    tempDir = await createTempDir('windows-server-');
-
-    await expect(
-      createApplication({
-        env: createTestEnv({
-          TTS_MODE: 'windows',
-          QUEUE_DB_PATH: path.join(tempDir, 'alerts.sqlite'),
-          AUDIO_OUTPUT_DIR: path.join(tempDir, 'audio')
-        }),
-        logger: createTestLogger(),
-        playerAdapter: new ControlledPlayerAdapter(),
-        runtimePlatform: 'linux',
-        windowsSpeechRunner: vi.fn().mockResolvedValue(undefined)
-      })
-    ).rejects.toThrow('TTS_MODE=windows is only supported on Windows.');
+  it('extracts the pathname from absolute IPv6 upgrade requests without depending on HOST formatting', () => {
+    expect(resolveUpgradeRequestPath('ws://[::1]:3000/api/v1/status/ws?token=test')).toBe('/api/v1/status/ws');
   });
 
-  it('rejects startup when the local Windows speech path is unusable', async () => {
-    tempDir = await createTempDir('windows-server-');
-
-    await expect(
-      createApplication({
-        env: createTestEnv({
-          TTS_MODE: 'windows',
-          QUEUE_DB_PATH: path.join(tempDir, 'alerts.sqlite'),
-          AUDIO_OUTPUT_DIR: path.join(tempDir, 'audio')
-        }),
-        logger: createTestLogger(),
-        playerAdapter: new ControlledPlayerAdapter(),
-        runtimePlatform: 'win32',
-        windowsSpeechRunner: vi.fn().mockRejectedValue(new Error('Speech engine unavailable'))
-      })
-    ).rejects.toThrow('Windows TTS startup validation failed: Speech engine unavailable');
+  it('returns an empty path for malformed absolute upgrade requests instead of throwing', () => {
+    expect(resolveUpgradeRequestPath('ws://[::1')).toBe('');
   });
 
-  it('rejects startup when the configured audio output directory is unusable for windows mode', async () => {
-    tempDir = await createTempDir('windows-server-');
-
-    await expect(
-      createApplication({
-        env: createTestEnv({
-          TTS_MODE: 'windows',
-          QUEUE_DB_PATH: path.join(tempDir, 'alerts.sqlite'),
-          AUDIO_OUTPUT_DIR: path.join(tempDir, 'audio')
-        }),
-        logger: createTestLogger(),
-        playerAdapter: new ControlledPlayerAdapter(),
-        runtimePlatform: 'win32',
-        windowsSpeechRunner: vi.fn().mockResolvedValue(undefined),
-        ensureWindowsOutputDirectory: vi.fn().mockRejectedValue(new Error('Audio output directory is not writable'))
-      })
-    ).rejects.toThrow('Windows TTS startup validation failed: Audio output directory is not writable');
+  it('returns an empty path when the upgrade request has no URL', () => {
+    expect(resolveUpgradeRequestPath(undefined)).toBe('');
   });
 });

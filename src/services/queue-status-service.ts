@@ -1,10 +1,17 @@
 import type { HealthSnapshot, QueueSnapshot } from '../domain/queue-snapshot.js';
-import type { PlayerAdapter } from '../playback/player-adapter.js';
+import { CommandPlayerAdapter, type PlayerAdapter } from '../playback/player-adapter.js';
 import type { AlertOrchestrator } from './alert-orchestrator.js';
 import type { OverflowStore } from './overflow-store.js';
 import type { QueueAdmissionService } from './queue-admission-service.js';
 import type { QueueRecoveryService } from './queue-recovery-service.js';
-import { nowIso } from '../shared/time.js';
+import { nowIso, nowMs } from '../shared/time.js';
+
+const PLAYER_AVAILABILITY_CACHE_TTL_MS = 1_000;
+
+interface PlayerAvailabilityCacheEntry {
+  readonly checkedAtMs: number;
+  readonly available: boolean;
+}
 
 export class QueueStatusService {
   private readonly orchestrator: AlertOrchestrator;
@@ -13,6 +20,7 @@ export class QueueStatusService {
   private readonly recoveryService: QueueRecoveryService;
   private readonly playerAdapter: PlayerAdapter;
   private readonly recentFailureLimit: number;
+  private playerAvailabilityCache: PlayerAvailabilityCacheEntry | undefined;
 
   public constructor(
     orchestrator: AlertOrchestrator,
@@ -43,7 +51,7 @@ export class QueueStatusService {
   }
 
   public async getHealthSnapshot(): Promise<HealthSnapshot> {
-    const playerReady = await this.playerAdapter.ensureAvailable();
+    const playerReady = await this.getPlayerReady();
     const recoveryStatus = this.recoveryService.getStatus();
     const queuePersistenceReady = this.overflowStore.isReady() && recoveryStatus.ready;
 
@@ -54,5 +62,25 @@ export class QueueStatusService {
       configurationValid: true,
       recoveryMessage: recoveryStatus.message
     };
+  }
+
+  private async getPlayerReady(): Promise<boolean> {
+    if (this.playerAdapter instanceof CommandPlayerAdapter) {
+      const cachedAvailability = this.playerAvailabilityCache;
+      const currentTimeMs = nowMs();
+      if (cachedAvailability && currentTimeMs - cachedAvailability.checkedAtMs < PLAYER_AVAILABILITY_CACHE_TTL_MS) {
+        return cachedAvailability.available;
+      }
+
+      const available = await this.playerAdapter.ensureAvailable();
+      this.playerAvailabilityCache = {
+        checkedAtMs: currentTimeMs,
+        available
+      };
+
+      return available;
+    }
+
+    return this.playerAdapter.ensureAvailable();
   }
 }

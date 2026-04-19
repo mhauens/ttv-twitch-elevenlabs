@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { CommandPlayerAdapter } from '../../src/playback/player-adapter.js';
 import { QueueStatusService } from '../../src/services/queue-status-service.js';
 import { createTestLogger } from '../support/test-utils.js';
+import { createTestEnv } from '../support/test-utils.js';
 
 describe('QueueStatusService', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('aggregates queue, failure, rejection, and health state', async () => {
     const service = new QueueStatusService(
       {
@@ -64,5 +70,58 @@ describe('QueueStatusService', () => {
     expect(healthSnapshot.ready).toBe(true);
     expect(healthSnapshot.recoveryMessage).toContain('Recovered');
     expect(createTestLogger()).toBeDefined();
+  });
+
+  it('caches player availability briefly so repeated health reads do not re-run expensive checks on every poll', async () => {
+    vi.useFakeTimers();
+
+    let availabilityChecks = 0;
+    class CountingCommandPlayerAdapter extends CommandPlayerAdapter {
+      public readonly kind = 'counting-test';
+
+      public override async ensureAvailable(): Promise<boolean> {
+        availabilityChecks += 1;
+        return true;
+      }
+
+      protected buildArgs(...args: [string, string]): string[] {
+        void args;
+        return [];
+      }
+    }
+
+    const service = new QueueStatusService(
+      {
+        getActiveSummary: () => undefined,
+        getPendingDepth: () => 0,
+        getOldestPendingAgeMs: () => 0
+      } as never,
+      {
+        isReady: () => true,
+        getDeferredDepth: async () => 0,
+        listRecentFailures: async () => []
+      } as never,
+      {
+        getRecentRejections: () => []
+      } as never,
+      {
+        getStatus: () => ({
+          ready: true,
+          restoredCount: 0,
+          highestSequenceNumber: 0,
+          message: undefined
+        })
+      } as never,
+      new CountingCommandPlayerAdapter(createTestEnv()) as never,
+      5
+    );
+
+    await service.getHealthSnapshot();
+    await service.getHealthSnapshot();
+    expect(availabilityChecks).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1_001);
+    await service.getHealthSnapshot();
+    expect(availabilityChecks).toBe(2);
   });
 });

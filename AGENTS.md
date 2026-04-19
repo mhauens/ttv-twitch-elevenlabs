@@ -42,6 +42,13 @@ For most non-trivial changes, `pnpm lint`, `pnpm test`, and `pnpm build` are the
 - `examples/`: sample alert requests and burst fixtures
 - `specs/001-burst-safe-alert-queue/`: plan, quickstart, tasks, and OpenAPI contract for the current feature set
 
+## Codex Skills And GitHub Prompts
+
+- Speckit workflows under `.github/agents/` and `.github/prompts/` are the canonical source for prompt and agent behavior.
+- Codex should access those same workflows through the thin wrapper skills under `.agents/skills/speckit.*`.
+- Keep the `.github` files authoritative. If a Speckit workflow changes, update the matching Codex wrapper only as needed to preserve discovery text and links.
+- When a Speckit workflow calls scripts in this Windows-first repo, prefer the PowerShell variants under `.specify/scripts/powershell/` and `.specify/extensions/**/powershell/`.
+
 ## Architecture Rules
 
 - Keep routes thin. Request parsing, admission policy, recovery policy, and queue semantics belong in services.

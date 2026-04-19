@@ -13,6 +13,7 @@ Offiziell unterstuetzte Intake-Quellen fuer `POST /api/v1/alerts` sind `local`, 
 - SQLite-gestuetzter Overflow, wenn die In-Memory-Grenze erreicht ist
 - Deterministische Recovery nach Neustart
 - Queue- und Readiness-Sichtbarkeit ueber `GET /api/v1/queue` und `GET /api/v1/health`
+- Kombinierter Realtime-Statusstrom ueber `GET /api/v1/status/stream` (SSE) und `/api/v1/status/ws` (WebSocket)
 - Lokale Audioausgabe ueber VLC oder mpv
 - Stub-Modus fuer lokale Entwicklung ohne echte ElevenLabs-Anbindung
 - Windows-TTS-Modus fuer lokale Sprachsynthese ohne ElevenLabs-Zugang
@@ -139,6 +140,30 @@ Der Response-Envelope bleibt ebenfalls unveraendert. Wichtige Automationssignale
 - Mix It Up: `data.outcome`, `data.jobId`
 - Streamer.bot: HTTP-Status, `data.outcome`, `data.jobId`
 
+### `GET /api/v1/status/stream`
+
+Liefert den kombinierten Queue- und Health-Status als Server-Sent Events:
+
+- sofort ein `snapshot`-Event mit dem aktuellen Zustand
+- weitere `snapshot`-Events nur bei semantischen Aenderungen
+- `: keepalive`-Kommentare waehrend Idle-Phasen
+
+Beispiel:
+
+```powershell
+node examples/status-stream-sse.mjs
+```
+
+### `GET /api/v1/status/ws`
+
+Liefert denselben kombinierten Status als rohe JSON-Nachrichten ueber WebSocket. Client-Nachrichten werden ignoriert; bei Idle-Verbindungen sendet der Server Ping-Traffic.
+
+Beispiel:
+
+```powershell
+node examples/status-stream-ws.mjs
+```
+
 ## Offizielle Integrationen
 
 ### Mix It Up
@@ -205,6 +230,8 @@ Liefert Readiness und Betriebszustand, darunter:
 
 Wenn `playerReady=false` oder der Service sich im Shutdown befindet, nimmt `POST /api/v1/alerts` keine neue Arbeit mehr an.
 
+Die Stream-Endpunkte bleiben trotzdem verfuegbar, damit auch degradierte Zustandsbilder live beobachtet werden koennen.
+
 Die formale API-Beschreibung liegt in [local-alert-api.openapi.yaml](/c:/development/ttv-twitch-elevenlabs/specs/001-burst-safe-alert-queue/contracts/local-alert-api.openapi.yaml).
 
 ## Entwicklung
@@ -227,6 +254,8 @@ pnpm build
 Beispiele fuer Requests und Burst-Tests:
 
 - [examples/alerts.http](/c:/development/ttv-twitch-elevenlabs/examples/alerts.http)
+- [examples/status-stream-sse.mjs](/c:/development/ttv-twitch-elevenlabs/examples/status-stream-sse.mjs)
+- [examples/status-stream-ws.mjs](/c:/development/ttv-twitch-elevenlabs/examples/status-stream-ws.mjs)
 - [examples/streamerbot-alert.mjs](/c:/development/ttv-twitch-elevenlabs/examples/streamerbot-alert.mjs)
 - [examples/burst-alerts.json](/c:/development/ttv-twitch-elevenlabs/examples/burst-alerts.json)
 

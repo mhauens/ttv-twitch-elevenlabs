@@ -60,3 +60,10 @@ GET {{baseUrl}}/api/v1/queue
 
 ### Inspect service health
 GET {{baseUrl}}/api/v1/health
+
+### Subscribe to the SSE status stream
+GET {{baseUrl}}/api/v1/status/stream
+Accept: text/event-stream
+
+### WebSocket sample
+# Use `node examples/status-stream-ws.mjs` for the matching WebSocket stream client.
