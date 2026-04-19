@@ -11,6 +11,8 @@ import {
   createTempDir,
   createTestEnv,
   createTestLogger,
+  getAvailablePort,
+  openSseStream,
   waitFor
 } from '../support/test-utils.js';
 
@@ -186,6 +188,94 @@ describe('local alert API contract', () => {
     expect(unavailable.body.status).toBe('error');
     expect(unavailable.body.error).toMatchObject({
       code: expect.any(String),
+      message: expect.any(String),
+      requestId: expect.any(String)
+    });
+  });
+
+  it('returns the documented SSE headers and initial combined snapshot event', async () => {
+    tempDir = await createTempDir();
+    player = new ControlledPlayerAdapter();
+    player.available = false;
+    const port = await getAvailablePort();
+
+    application = await createApplication({
+      env: createTestEnv({
+        PORT: port,
+        QUEUE_DB_PATH: path.join(tempDir, 'alerts.sqlite'),
+        AUDIO_OUTPUT_DIR: path.join(tempDir, 'audio')
+      }),
+      logger: createTestLogger(),
+      playerAdapter: player,
+      textToSpeechClient: new RecordingTextToSpeechClient(path.join(tempDir, 'audio')),
+      statusStreamOptions: {
+        pollIntervalMs: 50,
+        sseKeepaliveIntervalMs: 150,
+        wsKeepaliveIntervalMs: 150
+      }
+    });
+    await application.start();
+
+    const stream = await openSseStream(`http://127.0.0.1:${port}/api/v1/status/stream`);
+    const initialFrame = await stream.nextFrame();
+    const payload = JSON.parse(initialFrame.data ?? '{}') as {
+      streamSequence: number;
+      emittedAt: string;
+      queue: Record<string, unknown>;
+      health: Record<string, unknown>;
+    };
+
+    expect(stream.response.status).toBe(200);
+    expect(stream.response.headers.get('content-type')).toContain('text/event-stream');
+    expect(stream.response.headers.get('cache-control')).toBe('no-cache');
+    expect(stream.response.headers.get('connection')).toBe('keep-alive');
+    expect(initialFrame.event).toBe('snapshot');
+    expect(initialFrame.id).toBe('1');
+    expect(payload).toMatchObject({
+      streamSequence: 1,
+      emittedAt: expect.any(String),
+      queue: {
+        inMemoryDepth: expect.any(Number),
+        deferredDepth: expect.any(Number),
+        oldestPendingAgeMs: expect.any(Number),
+        recentFailures: expect.any(Array),
+        recentRejections: expect.any(Array),
+        lastUpdatedAt: expect.any(String)
+      },
+      health: {
+        ready: expect.any(Boolean),
+        queuePersistenceReady: expect.any(Boolean),
+        playerReady: expect.any(Boolean),
+        configurationValid: expect.any(Boolean)
+      }
+    });
+
+    await stream.close();
+  });
+
+  it('returns the documented 503 error envelope when the combined status stream is unavailable', async () => {
+    tempDir = await createTempDir();
+    player = new ControlledPlayerAdapter();
+
+    application = await createApplication({
+      env: createTestEnv({
+        QUEUE_DB_PATH: path.join(tempDir, 'alerts.sqlite'),
+        AUDIO_OUTPUT_DIR: path.join(tempDir, 'audio')
+      }),
+      logger: createTestLogger(),
+      playerAdapter: player,
+      textToSpeechClient: new RecordingTextToSpeechClient(path.join(tempDir, 'audio'))
+    });
+
+    await application.services.statusStreamService.stop();
+
+    const client = request(application.app);
+    const unavailable = await client.get('/api/v1/status/stream');
+
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.body.status).toBe('error');
+    expect(unavailable.body.error).toMatchObject({
+      code: 'STATUS_STREAM_UNAVAILABLE',
       message: expect.any(String),
       requestId: expect.any(String)
     });

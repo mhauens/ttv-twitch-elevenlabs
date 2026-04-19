@@ -61,4 +61,23 @@ describe('windows TTS startup integration', () => {
       })
     ).rejects.toThrow('Windows TTS startup validation failed: No default voice available');
   });
+
+  it('fails startup when the configured audio output directory is unusable in the full application wiring', async () => {
+    tempDir = await createTempDir('windows-tts-integration-');
+
+    await expect(
+      createApplication({
+        env: createTestEnv({
+          TTS_MODE: 'windows',
+          QUEUE_DB_PATH: path.join(tempDir, 'alerts.sqlite'),
+          AUDIO_OUTPUT_DIR: path.join(tempDir, 'audio')
+        }),
+        logger: createTestLogger(),
+        playerAdapter: new ControlledPlayerAdapter(),
+        runtimePlatform: 'win32',
+        windowsSpeechRunner: vi.fn().mockResolvedValue(undefined),
+        ensureWindowsOutputDirectory: vi.fn().mockRejectedValue(new Error('Audio output directory is not writable'))
+      })
+    ).rejects.toThrow('Windows TTS startup validation failed: Audio output directory is not writable');
+  });
 });

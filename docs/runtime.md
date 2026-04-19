@@ -34,12 +34,25 @@ The service validates configuration at startup and exposes:
 - `GET /api/v1/health` for readiness and persistence state.
 - `POST /api/v1/alerts` for alert admission.
 - `GET /api/v1/queue` for queue visibility.
+- `GET /api/v1/status/stream` for the combined realtime status feed over SSE.
+- `GET /api/v1/status/ws` for the same combined status feed over WebSocket.
 
 Supported intake sources for `POST /api/v1/alerts` are `local`, `twitch`, `streamerbot`, and `mixitup`.
 
 Example requests are available in `examples/alerts.http`, the official scripted Streamer.bot example is in `examples/streamerbot-alert.mjs`, and a sample burst payload set is available in `examples/burst-alerts.json`.
 
 If `TTS_MODE=windows` is configured on a non-Windows runtime or `powershell.exe`, the Windows speech engine, or the configured audio output directory cannot be used for a temporary WAV write, startup fails before the service can report ready.
+
+## Combined Status Stream
+
+- `GET /api/v1/status/stream` sends an immediate `event: snapshot` message with the current combined queue and health payload.
+- Additional SSE `snapshot` events are emitted only when the semantic queue or health state changes.
+- Idle SSE subscribers receive `: keepalive` comments at least every 15 seconds.
+- `/api/v1/status/ws` exposes the same `CombinedStatusSnapshot` payload as raw JSON over WebSocket.
+- Idle WebSocket subscribers receive ping traffic at least every 30 seconds. Client-originated WebSocket messages are ignored.
+- Both stream transports remain available even when `GET /api/v1/health` reports `ready=false`, so operators can still observe degraded state.
+
+Example clients are available in `examples/status-stream-sse.mjs` and `examples/status-stream-ws.mjs`.
 
 ## Official Tool Integration Paths
 
@@ -80,9 +93,11 @@ No alternative Streamer.bot transport path is part of the supported contract.
 
 - Use `GET /api/v1/queue` to inspect active work, pending backlog, deferred backlog, and recent failure or rejection summaries.
 - Use `GET /api/v1/health` to confirm queue persistence and player readiness before going live.
+- Use `GET /api/v1/status/stream` or `/api/v1/status/ws` when a local dashboard or automation needs push-based updates instead of polling the pull endpoints.
 - `POST /api/v1/alerts` returns `503` when persistence, startup recovery, player availability, or shutdown state make new intake unsafe.
 - Duplicate handling, queue admission, backlog visibility, and recovery behavior remain identical for `local`, `twitch`, `streamerbot`, and `mixitup`.
 - Check structured logs for `requestId`, `jobId`, `sequenceNumber`, `inMemoryDepth`, and `deferredDepth` when diagnosing burst admission behavior.
+- Snapshot refresh failures plus stream subscriber connect and disconnect events are emitted as structured logs by the status stream service.
 
 ## Validation Notes
 

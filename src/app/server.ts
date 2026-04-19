@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
+import { WebSocket, WebSocketServer } from 'ws';
 
 import { createQueueConfig } from '../config/queue-config.js';
 import { loadEnv, type AppEnv } from '../config/env.js';
@@ -12,11 +13,13 @@ import { createPlayerAdapter, type PlayerAdapter } from '../playback/player-adap
 import { buildAlertsRoute } from '../routes/alerts-route.js';
 import { buildHealthRoute } from '../routes/health-route.js';
 import { buildQueueStatusRoute } from '../routes/queue-status-route.js';
+import { buildStatusStreamRoute } from '../routes/status-stream-route.js';
 import { AlertOrchestrator } from '../services/alert-orchestrator.js';
 import { OverflowStore } from '../services/overflow-store.js';
 import { QueueAdmissionService } from '../services/queue-admission-service.js';
 import { QueueRecoveryService } from '../services/queue-recovery-service.js';
 import { QueueStatusService } from '../services/queue-status-service.js';
+import { StatusStreamService, type StatusStreamServiceOptions } from '../services/status-stream-service.js';
 import { ApiError, sendApiError } from '../shared/errors.js';
 import { createRequestId } from '../shared/ids.js';
 import { createLogger, type AppLogger } from '../shared/logger.js';
@@ -32,6 +35,7 @@ export interface ApplicationOptions {
   readonly ensureWindowsOutputDirectory?: (directoryPath: string) => Promise<void>;
   readonly removeWindowsOutputFile?: (filePath: string) => Promise<void>;
   readonly overflowStore?: OverflowStore;
+  readonly statusStreamOptions?: Pick<StatusStreamServiceOptions, 'pollIntervalMs' | 'sseKeepaliveIntervalMs' | 'wsKeepaliveIntervalMs'>;
 }
 
 export interface ApplicationContext {
@@ -46,7 +50,20 @@ export interface ApplicationContext {
     readonly queueAdmissionService: QueueAdmissionService;
     readonly queueRecoveryService: QueueRecoveryService;
     readonly queueStatusService: QueueStatusService;
+    readonly statusStreamService: StatusStreamService;
   };
+}
+
+export function resolveUpgradeRequestPath(requestUrl: string | undefined): string {
+  if (!requestUrl) {
+    return '';
+  }
+
+  try {
+    return new URL(requestUrl, 'http://localhost').pathname;
+  } catch {
+    return '';
+  }
 }
 
 export async function createApplication(options: ApplicationOptions = {}): Promise<ApplicationContext> {
@@ -93,6 +110,11 @@ export async function createApplication(options: ApplicationOptions = {}): Promi
     playerAdapter,
     queueConfig.recentFailureLimit
   );
+  const statusStreamService = new StatusStreamService({
+    queueStatusService,
+    logger,
+    ...options.statusStreamOptions
+  });
 
   const app = express();
   let stopping = false;
@@ -118,6 +140,7 @@ export async function createApplication(options: ApplicationOptions = {}): Promi
   app.use(buildHealthRoute(queueStatusService));
   app.use(buildAlertsRoute(queueAdmissionService, logger));
   app.use(buildQueueStatusRoute(queueStatusService));
+  app.use(buildStatusStreamRoute(statusStreamService));
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     void _next;
     logger.error({ error }, 'Unhandled application error.');
@@ -132,6 +155,7 @@ export async function createApplication(options: ApplicationOptions = {}): Promi
   });
 
   let server: Server | null = null;
+  let webSocketServer: WebSocketServer | null = null;
 
   return {
     app,
@@ -142,8 +166,35 @@ export async function createApplication(options: ApplicationOptions = {}): Promi
         return;
       }
 
+      await statusStreamService.start({ applicationOwned: true });
+
       await new Promise<void>((resolve) => {
         server = createServer(app);
+        webSocketServer = new WebSocketServer({ noServer: true });
+        webSocketServer.on('connection', (socket: WebSocket) => {
+          void statusStreamService.subscribeWebSocket(socket).catch((error: unknown) => {
+            logger.warn({ error }, 'Closing WebSocket connection because the status stream is unavailable.');
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.close(1011, 'Status stream unavailable');
+            }
+          });
+        });
+        server.on('upgrade', (request, socket, head) => {
+          const requestPath = resolveUpgradeRequestPath(request.url);
+          if (requestPath !== '/api/v1/status/ws' || !webSocketServer) {
+            socket.destroy();
+            return;
+          }
+
+          if (stopping) {
+            socket.destroy();
+            return;
+          }
+
+          webSocketServer.handleUpgrade(request, socket, head, (client: WebSocket) => {
+            webSocketServer?.emit('connection', client, request);
+          });
+        });
         server.listen(env.PORT, env.HOST, () => {
           logger.info({ host: env.HOST, port: env.PORT }, 'Alert queue service started.');
           resolve();
@@ -152,6 +203,13 @@ export async function createApplication(options: ApplicationOptions = {}): Promi
     },
     stop: async () => {
       stopping = true;
+      await statusStreamService.stop();
+      if (webSocketServer) {
+        await new Promise<void>((resolve) => {
+          webSocketServer?.close(() => resolve());
+        });
+        webSocketServer = null;
+      }
       if (server) {
         await new Promise<void>((resolve, reject) => {
           server?.close((error) => {
@@ -172,7 +230,8 @@ export async function createApplication(options: ApplicationOptions = {}): Promi
       orchestrator,
       queueAdmissionService,
       queueRecoveryService,
-      queueStatusService
+      queueStatusService,
+      statusStreamService
     }
   };
 }
