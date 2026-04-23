@@ -11,7 +11,7 @@ Detect the Git remote URL for integration with GitHub services (e.g., issue crea
 
 ## Prerequisites
 
-- Check if Git is available by running `git rev-parse --is-inside-work-tree 2>/dev/null`
+- Check if Git is available by running `git rev-parse --is-inside-work-tree 2>$null` in PowerShell or `git rev-parse --is-inside-work-tree 2>/dev/null` in Bash
 - If Git is not available, output a warning and return empty:
   ```
   [specify] Warning: Git repository not detected; cannot determine remote URL

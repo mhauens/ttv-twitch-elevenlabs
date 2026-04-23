@@ -55,7 +55,7 @@ For each good practice:
 
 - Render this section only when it contains concrete validation advice.
 - Mention missing tests, lint checks, or concrete manual verification steps when they are relevant to the changed behavior.
-- Prefer concrete repo commands such as `npm run lint`, `npm test`, and `npm run build`.
+- Prefer concrete repo commands such as `pnpm lint`, `pnpm test`, and `pnpm build`.
 - For queue, recovery, contract, or health changes, mention the API smoke path with `examples/alerts.http` and `examples/burst-alerts.json` when it has not been covered.
 - For playback or Windows-specific runtime changes, mention local verification of `PLAYER_COMMAND`, queue DB path, and audio output directory when relevant.
 - If no automated test path exists in the repository for the affected area, say so plainly.

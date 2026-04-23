@@ -11,7 +11,7 @@ Validate that the current Git branch follows the expected feature branch naming 
 
 ## Prerequisites
 
-- Check if Git is available by running `git rev-parse --is-inside-work-tree 2>/dev/null`
+- Check if Git is available by running `git rev-parse --is-inside-work-tree 2>$null` in PowerShell or `git rev-parse --is-inside-work-tree 2>/dev/null` in Bash
 - If Git is not available, output a warning and skip validation:
   ```
   [specify] Warning: Git repository not detected; skipped branch validation

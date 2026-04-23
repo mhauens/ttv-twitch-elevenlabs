@@ -68,14 +68,14 @@ Use this file as a quick repo-specific review summary. The canonical rules remai
 
 ## Validation Commands
 
-- `npm run lint` validates the TypeScript and flat ESLint configuration.
-- `npm test` runs unit, integration, and contract tests with Vitest.
-- `npm run build` verifies that the TypeScript project compiles cleanly.
-- `npm run lint`, `npm test`, and `npm run build` are the minimum recommended validation after most code changes.
+- `pnpm lint` validates the TypeScript and flat ESLint configuration.
+- `pnpm test` runs unit, integration, and contract tests with Vitest.
+- `pnpm build` verifies that the TypeScript project compiles cleanly.
+- `pnpm lint`, `pnpm test`, and `pnpm build` are the minimum recommended validation after most code changes.
 
 ## Manual Validation Context
 
-- `npm run dev` starts the local service.
+- `pnpm dev` starts the local service.
 - API and queue behavior can be smoke-tested with `examples/alerts.http` and `examples/burst-alerts.json`.
 - Queue, recovery, or health changes should be checked manually with this flow when practical:
   1. start the service

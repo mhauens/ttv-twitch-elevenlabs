@@ -22,6 +22,7 @@ user-invocable: true
 - Prefer local git-aware tooling available in the environment.
 - Use `git status --short` first so staged, unstaged, and untracked files are all in scope.
 - Use workspace diff tooling such as `get_changed_files` when available and `git diff -U3` or equivalent with at least 3 lines of context to inspect the actual hunks for tracked files.
+- If Git reports `dubious ownership`, retry read-only Git commands with `git -c safe.directory=<absolute repo path> ...` for this repository instead of changing global Git configuration.
 - For untracked files, read the files directly instead of relying on `git diff`, since they are outside the normal diff output.
 - Read additional code only when the changed lines require nearby symbols, helpers, contracts, tests, or service modules for correct evaluation.
 - Keep the review source-bound to:
@@ -94,7 +95,7 @@ user-invocable: true
 
 ## 7. Validation and Commands
 
-- When useful, recommend or run repo-native validation commands referenced in [repo-checklist.md](references/repo-checklist.md), especially `npm run lint`, `npm test`, and `npm run build`.
+- When useful, recommend or run repo-native validation commands referenced in [repo-checklist.md](references/repo-checklist.md), especially `pnpm lint`, `pnpm test`, and `pnpm build`.
 - Do not invent tests or CI steps that do not exist in the repository.
 - If queue semantics, recovery, or contract behavior changed, call out the API-level smoke path from `AGENTS.md` using `examples/alerts.http` and `examples/burst-alerts.json`.
 - If playback or Windows-specific runtime behavior changed, call out local verification of `PLAYER_COMMAND`, writable paths, and startup readiness on Windows.
